@@ -1,0 +1,135 @@
+---
+title: "Practical Machine Learning"
+author: "Gustavo Amigo"
+date: "Sunday, March 22, 2015"
+output: html_document
+---
+
+Summary
+=======
+This project consist in predicting an workout activity based on sensors attached 
+the body of a person. Dataset used from http://groupware.les.inf.puc-rio.br/har
+
+Training Set
+============
+First we partition our dataset in two groups, 60% for the training set and 30% 
+for the test set. 
+```{r, echo=FALSE, message=F, warning=F}
+
+library(caret);library(zoo)
+pml <- read.csv("pml-training.csv", na.strings=c("NA", "#DIV/0!"))
+
+set.seed(3451)
+inTrain <- createDataPartition(y=pml$classe,
+                               p=0.6, list=FALSE)
+training <- pml[inTrain,]
+testing <- pml[-inTrain,]
+print(paste("training set size :", dim(training)[1]),quote = FALSE)
+print(paste("testing set size:", dim(testing)[1]),quote = FALSE)
+
+```
+
+
+Feature Selection
+=================
+The original dataset had 160 columns. Exploring the dataset, we noticed that 
+most columns had only NA (Not Available) observations. So, the first thing we did
+was take this columns out of the dataset. Our criteria is that any column that has
+more than 95% of the data NA will be taken out. 
+
+```{r, echo=FALSE}
+countNumberOfNA <- function(data) {
+        cols <- 1:length(names(data))
+        numna <- numeric(max(cols))
+        ratio <- numeric(max(cols))
+        for(col in cols) {
+                numna[col] <- sum(is.na(data[,col]))
+                
+                ratio[col] <- sum(is.na(data[,col]))/length(data[,col])
+                
+        }
+        data.frame(col=1:max(cols), colName=names(data)[1:max(cols)] ,  numna = numna, ratio=ratio)
+}
+numberOfNA <-countNumberOfNA(training)
+
+colsToIgnore <- as.vector(numberOfNA[numberOfNA$ratio>0.95,1])
+
+print(paste("Number of columns before extracting mostly NA columwn :", length(names(training))),quote = FALSE)
+training <- training[,-colsToIgnore]
+print(paste("Number of columns after extracting mostly NA columwn :", length(names(training))),quote = FALSE)
+```
+
+Now, we will remove the Near Zero Values. 
+```{r, echo=FALSE}
+nzv <- nearZeroVar(training,saveMetrics=TRUE)
+
+predictorsZero <- rownames(nzv[nzv$zeroVar==TRUE,])
+predictorsNzv <- rownames(nzv[nzv$zeroVar==FALSE &  nzv$nzv == TRUE,])
+colsToRemove <- c(predictorsZero, predictorsNzv)
+colsToUse <- setdiff(names(training), colsToRemove)
+training <- training[,colsToUse]
+print(paste("Number of columns after removing NZV columwns :", length(names(training))),quote = FALSE)
+```
+
+Finally, we remove the first 5 columns because they are not sensor data and therefore
+are useless to predict the outcome. 
+```{r, echo=FALSE}
+notPredictors <- head(names(training),5)
+colsToUse <- setdiff(names(training), notPredictors)
+training <- training[,colsToUse]
+print(paste("Number of columns after removing first 5 columwns :", length(names(training))),quote = FALSE)
+```
+
+So now we have 54 columns, 53 are predictors and the 54th is the outcome, which is the column "classe".
+
+Training and Cross-validation
+=============================
+
+Now, we are going to train our model. The model selected is Random Forest. For the cross-validation, we are going to use the Repeated Cross-Validation.
+
+The parameters to train our model are:
+
+_Repeated Cross-Validation_:
+
+  * 3 K-folds
+  * 3 repeats
+
+_Random Forest_:
+
+  * 100 trees
+
+Training our model gives the following output:
+```{r, message=F, warning=F, echo=FALSE}
+set.seed(5555)
+fitControl <- trainControl(
+        method = "repeatedcv",
+        number = 3,
+        repeats = 3)
+
+modelFit <- train(classe ~ . ,method="rf", data=training, ntree=50, trControl = fitControl, verbose = FALSE)
+modelFit
+```
+
+So we can predict that our model will have an Accuracy of 99.4% and KAPPA of 99.2%.
+Both are pretty close to 100%, so we can say that our predict model is working
+well. 
+
+Final Validation
+================
+So, we predict using the test dataset and compare to the real outcome. 
+
+The Confusion Matrix generated from our model.
+```{r, echo=FALSE}
+confusionMatrix(testing$classe,predict(modelFit,testing))
+```
+
+As we can see, we've achieved 99.7% of Accuracy and 99.6% of Kappa, which is better
+than we predict during the training step. 
+
+Conclusion
+==========
+We were able to create a model using Random Forest that is quite accurate, 
+we predicted that it would have an an Accuracy of 99.4% and KAPPA of 99.2%
+during our training step and we achieved 99.7% of Accuracy and 99.6% of Kappa,
+which means that our model is doing a good job in predicting the classe outcome
+based on the sensor data from our dataset. 
