@@ -12,7 +12,7 @@ the body of a person. Dataset used from http://groupware.les.inf.puc-rio.br/har
 
 Training Set
 ============
-First we partition our dataset in two groups, 60% for the training set and 30% 
+First we partition our dataset in two groups, 60% for the training set and 40% 
 for the test set. 
 ```{r, echo=FALSE, message=F, warning=F}
 
